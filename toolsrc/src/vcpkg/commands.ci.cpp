@@ -49,7 +49,7 @@ namespace vcpkg::Commands::CI
                 return Dependencies::AnyAction(std::move(install_action));
             });
 
-        return Install::perform(action_plan, Install::KeepGoing::YES, paths, status_db);
+        return Install::perform(action_plan, Install::KeepGoing::YES, Install::CleanBuildtrees::YES, paths, status_db);
     }
 
     struct TripletAndSummary
@@ -75,8 +75,14 @@ namespace vcpkg::Commands::CI
     void perform_and_exit(const VcpkgCmdArguments& args, const VcpkgPaths& paths, const Triplet& default_triplet)
     {
         const ParsedArguments options = args.parse_arguments(COMMAND_STRUCTURE);
-        const std::vector<std::string> exclusions = Strings::split(options.settings.at(OPTION_EXCLUDE), ",");
-        const std::set<std::string> exclusions_set(exclusions.cbegin(), exclusions.cend());
+
+        std::set<std::string> exclusions_set;
+        auto it_exclusions = options.settings.find(OPTION_EXCLUDE);
+        if (it_exclusions != options.settings.end())
+        {
+            auto exclusions = Strings::split(it_exclusions->second, ",");
+            exclusions_set.insert(exclusions.begin(), exclusions.end());
+        }
 
         std::vector<Triplet> triplets;
         for (const std::string& triplet : args.command_arguments)

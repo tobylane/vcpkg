@@ -6,6 +6,8 @@
 #include <utility>
 #include <vector>
 
+#include <vcpkg/base/optional.h>
+
 namespace vcpkg::Util
 {
     template<class Container>
@@ -22,8 +24,8 @@ namespace vcpkg::Util
 
     namespace Sets
     {
-        template<class Container, class T = ElementT<Container>>
-        bool contains(const Container& container, const T& item)
+        template<class Container>
+        bool contains(const Container& container, const ElementT<Container>& item)
         {
             return container.find(item) != container.cend();
         }
