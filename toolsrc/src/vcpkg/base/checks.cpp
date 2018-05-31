@@ -10,7 +10,13 @@ namespace vcpkg::Checks
 {
     [[noreturn]] static void cleanup_and_exit(const int exit_code)
     {
+        static std::atomic<bool> have_entered{false};
+        if (have_entered) std::terminate();
+        have_entered = true;
+
         const auto elapsed_us = GlobalState::timer.lock()->microseconds();
+
+        Debug::println("Exiting after %d us", static_cast<int>(elapsed_us));
 
         auto metrics = Metrics::g_metrics.lock();
         metrics->track_metric("elapsed_us", elapsed_us);
@@ -27,7 +33,7 @@ namespace vcpkg::Checks
 #if defined(_WIN32)
         ::TerminateProcess(::GetCurrentProcess(), exit_code);
 #else
-        ::exit(exit_code);
+        std::exit(exit_code);
 #endif
     }
 
