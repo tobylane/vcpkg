@@ -37,61 +37,10 @@ set(_csc_PROJECT_PATH ffmpeg)
 file(REMOVE_RECURSE ${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-dbg ${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel)
 
 set(OPTIONS "--disable-everything")
-set(OPTIONS "${OPTIONS} --enable-asm --enable-yasm --disable-doc --enable-debug --disable-ffmpeg")
+set(OPTIONS "${OPTIONS} --enable-asm --enable-x86asm --disable-doc --enable-debug --disable-ffmpeg --disable-ffprobe")
 set(OPTIONS "${OPTIONS} --enable-decoder=smacker --enable-decoder=smackaud --enable-demuxer=smacker")
 set(OPTIONS "${OPTIONS} --enable-protocol=file --enable-protocol=cache --enable-protocol=pipe")
-set(OPTIONS "${OPTIONS} --enable-runtime-cpudetect")
-
-if("nonfree" IN_LIST FEATURES)
-    set(OPTIONS "${OPTIONS} --enable-nonfree")
-endif()
-
-if("gpl" IN_LIST FEATURES)
-    set(OPTIONS "${OPTIONS} --enable-gpl")
-endif()
-
-if("openssl" IN_LIST FEATURES)
-    set(OPTIONS "${OPTIONS} --enable-openssl")
-else()
-    set(OPTIONS "${OPTIONS} --disable-openssl")
-endif()
-
-if("ffplay" IN_LIST FEATURES)
-    set(OPTIONS "${OPTIONS} --enable-ffplay")
-else()
-    set(OPTIONS "${OPTIONS} --disable-ffplay")
-endif()
-
-if("ffprobe" IN_LIST FEATURES)
-    set(OPTIONS "${OPTIONS} --enable-ffprobe")
-else()
-    set(OPTIONS "${OPTIONS} --disable-ffprobe")
-endif()
-
-if("x264" IN_LIST FEATURES)
-    set(OPTIONS "${OPTIONS} --enable-libx264")
-else()
-    set(OPTIONS "${OPTIONS} --disable-libx264")
-endif()
-
-if("opencl" IN_LIST FEATURES)
-    set(OPTIONS "${OPTIONS} --enable-opencl")
-else()
-    set(OPTIONS "${OPTIONS} --disable-opencl")
-endif()
-
-if("lzma" IN_LIST FEATURES)
-    set(OPTIONS "${OPTIONS} --enable-lzma")
-else()
-    set(OPTIONS "${OPTIONS} --disable-lzma")
-endif()
-
-# bzip2's debug library is named "bz2d", which isn't found by ffmpeg
-# if("bzip2" IN_LIST FEATURES)
-#     set(OPTIONS "${OPTIONS} --enable-bzip2")
-# else()
-#     set(OPTIONS "${OPTIONS} --disable-bzip2")
-# endif()
+set(OPTIONS "${OPTIONS} --disable-autodetect --enable-runtime-cpudetect")
 
 if(VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
     set(ENV{LIBPATH} "$ENV{LIBPATH};$ENV{_WKITS10}references\\windows.foundation.foundationcontract\\2.0.0.0\\;$ENV{_WKITS10}references\\windows.foundation.universalapicontract\\3.0.0.0\\")
