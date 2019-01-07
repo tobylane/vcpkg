@@ -40,7 +40,7 @@ set(OPTIONS "--disable-everything")
 set(OPTIONS "${OPTIONS} --enable-asm --enable-x86asm --disable-doc --enable-debug --disable-ffmpeg --disable-ffprobe")
 set(OPTIONS "${OPTIONS} --enable-decoder=smacker --enable-decoder=smackaud --enable-demuxer=smacker")
 set(OPTIONS "${OPTIONS} --enable-protocol=file --enable-protocol=cache --enable-protocol=pipe")
-set(OPTIONS "${OPTIONS} --disable-autodetect --enable-runtime-cpudetect")
+set(OPTIONS "${OPTIONS} --disable-d3d11va --disable-dxva2 --enable-runtime-cpudetect")
 
 if(VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
     set(ENV{LIBPATH} "$ENV{LIBPATH};$ENV{_WKITS10}references\\windows.foundation.foundationcontract\\2.0.0.0\\;$ENV{_WKITS10}references\\windows.foundation.universalapicontract\\3.0.0.0\\")
