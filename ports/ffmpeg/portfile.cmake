@@ -1,46 +1,60 @@
 include(vcpkg_common_functions)
-set(SOURCE_PATH ${CURRENT_BUILDTREES_DIR}/src/ffmpeg-4.1)
+
 vcpkg_download_distfile(ARCHIVE
     URLS "http://ffmpeg.org/releases/ffmpeg-4.1.tar.bz2"
     FILENAME "ffmpeg-4.1.tar.bz2"
     SHA512 ccf6d07268dc47e08ca619eb182a003face2a8ee73ec1a28157330dd7de1df88939def1fc1c7e6b6ac7b59752cdad84657d589b2fafb73e14e5ef03fb6e33417
 )
 
+vcpkg_extract_source_archive_ex(
+    OUT_SOURCE_PATH SOURCE_PATH
+    ARCHIVE ${ARCHIVE}
+    PATCHES
+        create-lib-libraries.patch
+        detect-openssl.patch
+        configure_opencv.patch
+        fix_windowsinclude-in-ffmpegexe-1.patch
+        fix_windowsinclude-in-ffmpegexe-2.patch
+        fix_windowsinclude-in-ffmpegexe-3.patch
+)
+
 if (${SOURCE_PATH} MATCHES " ")
     message(FATAL_ERROR "Error: ffmpeg will not build with spaces in the path. Please use a directory with no spaces")
 endif()
 
-vcpkg_extract_source_archive(${ARCHIVE})
-vcpkg_apply_patches(
-    SOURCE_PATH ${SOURCE_PATH}
-    PATCHES
-        ${CMAKE_CURRENT_LIST_DIR}/create-lib-libraries.patch
-        ${CMAKE_CURRENT_LIST_DIR}/detect-openssl.patch
-        ${CMAKE_CURRENT_LIST_DIR}/configure_opencv.patch
-)
-
 vcpkg_find_acquire_program(YASM)
 get_filename_component(YASM_EXE_PATH ${YASM} DIRECTORY)
-set(ENV{PATH} "$ENV{PATH};${YASM_EXE_PATH}")
+
+if(NOT VCPKG_CMAKE_SYSTEM_NAME OR VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
+    set(SEP ";")
+    #We're assuming that if we're building for Windows we're using MSVC
+    set(INCLUDE_VAR "INCLUDE")
+    set(LIB_PATH_VAR "LIB")
+else()
+    set(SEP ":")
+    set(INCLUDE_VAR "CPATH")
+    set(LIB_PATH_VAR "LIBRARY_PATH")
+endif()
 
 if (WIN32)
+    set(ENV{PATH} "$ENV{PATH};${YASM_EXE_PATH}")
+
+    set(BUILD_SCRIPT ${CMAKE_CURRENT_LIST_DIR}\\build.sh)
+
     if(VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WindowsStore" AND VCPKG_TARGET_ARCHITECTURE STREQUAL "arm")
         vcpkg_acquire_msys(MSYS_ROOT PACKAGES perl gcc diffutils make)
     else()
         vcpkg_acquire_msys(MSYS_ROOT PACKAGES diffutils make)
     endif()
-endif()
 
-if (WIN32)
-  set(BASH ${MSYS_ROOT}/usr/bin/bash.exe)
-  set(BUILD_SCRIPT ${CMAKE_CURRENT_LIST_DIR}\\build.sh)
+    set(BASH ${MSYS_ROOT}/usr/bin/bash.exe)
 else()
-  set(BASH bash)
-  set(BUILD_SCRIPT ${CMAKE_CURRENT_LIST_DIR}/build_linux.sh)
+    set(ENV{PATH} "$ENV{PATH}:${YASM_EXE_PATH}")
+    set(BASH /bin/bash)
+    set(BUILD_SCRIPT ${CMAKE_CURRENT_LIST_DIR}/build_linux.sh)
 endif()
 
-set(ENV{INCLUDE} "${CURRENT_INSTALLED_DIR}/include;$ENV{INCLUDE}")
-set(ENV{LIB} "${CURRENT_INSTALLED_DIR}/lib;$ENV{LIB}")
+set(ENV{${INCLUDE_VAR}} "${CURRENT_INSTALLED_DIR}/include${SEP}$ENV{${INCLUDE_VAR}}")
 
 set(_csc_PROJECT_PATH ffmpeg)
 
@@ -84,7 +98,7 @@ endif()
 
 message(STATUS "Building Options: ${OPTIONS}")
 
-if(WIN32)
+if(NOT VCPKG_CMAKE_SYSTEM_NAME OR VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
     if(VCPKG_CRT_LINKAGE STREQUAL "dynamic")
         set(OPTIONS_DEBUG "${OPTIONS_DEBUG} --extra-cflags=-MDd --extra-cxxflags=-MDd")
         set(OPTIONS_RELEASE "${OPTIONS_RELEASE} --extra-cflags=-MD --extra-cxxflags=-MD")
@@ -93,6 +107,9 @@ if(WIN32)
         set(OPTIONS_RELEASE "${OPTIONS_RELEASE} --extra-cflags=-MT --extra-cxxflags=-MT")
     endif()
 endif()
+
+set(ENV_LIB_PATH "$ENV{${LIB_PATH_VAR}}")
+set(ENV{${LIB_PATH_VAR}} "${CURRENT_INSTALLED_DIR}/lib${SEP}${ENV_LIB_PATH}")
 
 message(STATUS "Building ${_csc_PROJECT_PATH} for Release")
 file(MAKE_DIRECTORY ${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel)
@@ -105,6 +122,8 @@ vcpkg_execute_required_process(
     WORKING_DIRECTORY ${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel
     LOGNAME build-${TARGET_TRIPLET}-rel
 )
+
+set(ENV{${LIB_PATH_VAR}} "${CURRENT_INSTALLED_DIR}/debug/lib${SEP}${ENV_LIB_PATH}")
 
 message(STATUS "Building ${_csc_PROJECT_PATH} for Debug")
 file(MAKE_DIRECTORY ${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-dbg)
