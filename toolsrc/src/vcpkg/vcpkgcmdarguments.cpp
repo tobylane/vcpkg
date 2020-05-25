@@ -33,6 +33,21 @@ namespace vcpkg
         option_field = std::make_unique<std::string>(*arg_begin);
     }
 
+    static void parse_cojoined_value(std::string new_value,
+                                     const std::string& option_name,
+                                     std::unique_ptr<std::string>& option_field)
+    {
+        if (nullptr != option_field)
+        {
+            System::printf(System::Color::error, "Error: %s specified multiple times\n", option_name);
+            Metrics::g_metrics.lock()->track_property("error", "error option specified multiple times");
+            Help::print_usage();
+            Checks::exit_fail(VCPKG_LINE_INFO);
+        }
+
+        option_field = std::make_unique<std::string>(std::move(new_value));
+    }
+
     static void parse_switch(bool new_setting, const std::string& option_name, Optional<bool>& option_field)
     {
         if (option_field && option_field != new_setting)
@@ -43,6 +58,40 @@ namespace vcpkg
             Checks::exit_fail(VCPKG_LINE_INFO);
         }
         option_field = new_setting;
+    }
+
+    static void parse_cojoined_multivalue(std::string new_value,
+                                          const std::string& option_name,
+                                          std::unique_ptr<std::vector<std::string>>& option_field)
+    {
+        if (new_value.empty())
+        {
+            System::print2(System::Color::error, "Error: expected value after ", option_name, '\n');
+            Metrics::g_metrics.lock()->track_property("error", "error option name");
+            Help::print_usage();
+            Checks::exit_fail(VCPKG_LINE_INFO);
+        }
+
+        if (!option_field)
+        {
+            option_field = std::make_unique<std::vector<std::string>>();
+        }
+        option_field->emplace_back(std::move(new_value));
+    }
+
+    static void parse_cojoined_multivalue(std::string new_value,
+                                          const std::string& option_name,
+                                          std::vector<std::string>& option_field)
+    {
+        if (new_value.empty())
+        {
+            System::print2(System::Color::error, "Error: expected value after ", option_name, '\n');
+            Metrics::g_metrics.lock()->track_property("error", "error option name");
+            Help::print_usage();
+            Checks::exit_fail(VCPKG_LINE_INFO);
+        }
+
+        option_field.emplace_back(std::move(new_value));
     }
 
     VcpkgCmdArguments VcpkgCmdArguments::create_from_command_line(const int argc,
@@ -101,9 +150,10 @@ namespace vcpkg
 
             if (arg[0] == '-' && arg[1] == '-')
             {
-                // make argument case insensitive
+                // make argument case insensitive before the first =
                 auto& f = std::use_facet<std::ctype<char>>(std::locale());
-                f.tolower(&arg[0], &arg[0] + arg.size());
+                auto first_eq = std::find(std::begin(arg), std::end(arg), '=');
+                f.tolower(&arg[0], &arg[0] + (first_eq - std::begin(arg)));
                 // command switch
                 if (arg == "--vcpkg-root")
                 {
@@ -111,10 +161,40 @@ namespace vcpkg
                     parse_value(arg_begin, arg_end, "--vcpkg-root", args.vcpkg_root_dir);
                     continue;
                 }
+                if (Strings::starts_with(arg, "--x-scripts-root="))
+                {
+                    parse_cojoined_value(
+                        arg.substr(sizeof("--x-scripts-root=") - 1), "--x-scripts-root", args.scripts_root_dir);
+                    continue;
+                }
+                if (Strings::starts_with(arg, "--x-install-root="))
+                {
+                    parse_cojoined_value(
+                        arg.substr(sizeof("--x-install-root=") - 1), "--x-install-root=", args.install_root_dir);
+                    continue;
+                }
                 if (arg == "--triplet")
                 {
                     ++arg_begin;
                     parse_value(arg_begin, arg_end, "--triplet", args.triplet);
+                    continue;
+                }
+                if (Strings::starts_with(arg, "--overlay-ports="))
+                {
+                    parse_cojoined_multivalue(
+                        arg.substr(sizeof("--overlay-ports=") - 1), "--overlay-ports", args.overlay_ports);
+                    continue;
+                }
+                if (Strings::starts_with(arg, "--overlay-triplets="))
+                {
+                    parse_cojoined_multivalue(
+                        arg.substr(sizeof("--overlay-triplets=") - 1), "--overlay-triplets", args.overlay_triplets);
+                    continue;
+                }
+                if (Strings::starts_with(arg, "--x-binarysource="))
+                {
+                    parse_cojoined_multivalue(
+                        arg.substr(sizeof("--x-binarysource=") - 1), "--x-binarysource", args.binarysources);
                     continue;
                 }
                 if (arg == "--debug")
@@ -166,7 +246,21 @@ namespace vcpkg
                 const auto eq_pos = arg.find('=');
                 if (eq_pos != std::string::npos)
                 {
-                    args.optional_command_arguments.emplace(arg.substr(0, eq_pos), arg.substr(eq_pos + 1));
+                    const auto& key = arg.substr(0, eq_pos);
+                    const auto& value = arg.substr(eq_pos + 1);
+
+                    auto it = args.optional_command_arguments.find(key);
+                    if (args.optional_command_arguments.end() == it)
+                    {
+                        args.optional_command_arguments.emplace(key, std::vector<std::string>{value});
+                    }
+                    else
+                    {
+                        if (auto* maybe_values = it->second.get())
+                        {
+                            maybe_values->emplace_back(value);
+                        }
+                    }
                 }
                 else
                 {
@@ -264,7 +358,52 @@ namespace vcpkg
                 }
                 else
                 {
-                    output.settings.emplace(option.name, it->second.value_or_exit(VCPKG_LINE_INFO));
+                    const auto& value = it->second.value_or_exit(VCPKG_LINE_INFO);
+                    if (value.front().empty())
+                    {
+                        // Fail when not given a value, e.g.: "vcpkg install sqlite3 --additional-ports="
+                        System::printf(
+                            System::Color::error, "Error: The option '%s' must be passed an argument.\n", option.name);
+                        failed = true;
+                    }
+                    else
+                    {
+                        output.settings.emplace(option.name, value.front());
+                        options_copy.erase(it);
+                    }
+                }
+            }
+        }
+
+        for (auto&& option : command_structure.options.multisettings)
+        {
+            const auto it = options_copy.find(option.name);
+            if (it != options_copy.end())
+            {
+                if (!it->second.has_value())
+                {
+                    // Not having a string value indicates it was passed like '--a'
+                    System::printf(
+                        System::Color::error, "Error: The option '%s' must be passed an argument.\n", option.name);
+                    failed = true;
+                }
+                else
+                {
+                    const auto& value = it->second.value_or_exit(VCPKG_LINE_INFO);
+                    for (auto&& v : value)
+                    {
+                        if (v.empty())
+                        {
+                            System::printf(System::Color::error,
+                                           "Error: The option '%s' must be passed an argument.\n",
+                                           option.name);
+                            failed = true;
+                        }
+                        else
+                        {
+                            output.multisettings[option.name].emplace_back(v);
+                        }
+                    }
                     options_copy.erase(it);
                 }
             }
@@ -275,7 +414,7 @@ namespace vcpkg
             System::printf(System::Color::error, "Unknown option(s) for command '%s':\n", this->command);
             for (auto&& option : options_copy)
             {
-                System::print2("    ", option.first, "\n");
+                System::print2("    '", option.first, "'\n");
             }
             System::print2("\n");
             failed = true;
@@ -298,17 +437,26 @@ namespace vcpkg
         }
 
         System::print2("Options:\n");
+        Help::HelpTableFormatter table;
         for (auto&& option : command_structure.options.switches)
         {
-            System::printf("    %-40s %s\n", option.name, option.short_help_text);
+            table.format(option.name, option.short_help_text);
         }
         for (auto&& option : command_structure.options.settings)
         {
-            System::printf("    %-40s %s\n", (option.name + "=..."), option.short_help_text);
+            table.format((option.name + "=..."), option.short_help_text);
         }
-        System::printf("    %-40s %s\n", "--triplet <t>", "Set the default triplet for unqualified packages");
-        System::printf("    %-40s %s\n",
-                       "--vcpkg-root <path>",
-                       "Specify the vcpkg directory to use instead of current directory or tool directory");
+        for (auto&& option : command_structure.options.multisettings)
+        {
+            table.format((option.name + "=..."), option.short_help_text);
+        }
+        table.format("--triplet <t>", "Set the default triplet for unqualified packages");
+        table.format("--overlay-ports=<path>", "Specify directories to be used when searching for ports");
+        table.format("--overlay-triplets=<path>", "Specify directories containing triplets files");
+        table.format("--vcpkg-root <path>",
+                     "Specify the vcpkg directory to use instead of current directory or tool directory");
+        table.format("--x-scripts-root=<path>",
+                     "(Experimental) Specify the scripts directory to use instead of default vcpkg scripts directory");
+        System::print2(table.m_str);
     }
 }

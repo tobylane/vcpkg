@@ -1,30 +1,12 @@
 #pragma once
 
-#if defined(_MSC_VER) && _MSC_VER < 1911
-// [[nodiscard]] is not recognized before VS 2017 version 15.3
-#pragma warning(disable : 5030)
-#endif
-
-#if defined(__GNUC__) && __GNUC__ < 7
-// [[nodiscard]] is not recognized before GCC version 7
-#pragma GCC diagnostic ignored "-Wattributes"
-#endif
+#include <vcpkg/base/pragmas.h>
+#include <vcpkg/base/system_headers.h>
 
 #if defined(_WIN32)
-#define NOMINMAX
-#define WIN32_LEAN_AND_MEAN
-
-#pragma warning(suppress : 4768)
-#include <windows.h>
-
-#pragma warning(suppress : 4768)
-#include <Shlobj.h>
-
 #include <process.h>
 #include <shellapi.h>
 #include <winhttp.h>
-#else
-#include <unistd.h>
 #endif
 
 #include <algorithm>
@@ -37,12 +19,15 @@
 #include <cstdarg>
 #include <cstddef>
 #include <cstdint>
-#if defined(_WIN32)
+#include <cstring>
+
+#if VCPKG_USE_STD_FILESYSTEM
 #include <filesystem>
 #else
+#define _SILENCE_EXPERIMENTAL_FILESYSTEM_DEPRECATION_WARNING
 #include <experimental/filesystem>
 #endif
-#include <cstring>
+
 #include <fstream>
 #include <functional>
 #include <iomanip>
@@ -61,7 +46,7 @@
 #else
 #include <sys/time.h>
 #endif
-#include <sys/types.h>
+
 #include <system_error>
 #include <thread>
 #include <time.h>
