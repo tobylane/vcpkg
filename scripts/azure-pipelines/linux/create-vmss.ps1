@@ -14,6 +14,8 @@ for more information.
 This script assumes you have installed Azure tools into PowerShell by following the instructions
 at https://docs.microsoft.com/en-us/powershell/azure/install-az-ps?view=azps-3.6.1
 or are running from Azure Cloud Shell.
+
+This script assumes you have installed the OpenSSH Client optional Windows component.
 #>
 
 $Location = 'westus2'
@@ -24,113 +26,24 @@ $LiveVMPrefix = 'BUILD'
 $ErrorActionPreference = 'Stop'
 
 $ProgressActivity = 'Creating Scale Set'
-$TotalProgress = 10
+$TotalProgress = 11
 $CurrentProgress = 1
 
-<#
-.SYNOPSIS
-Returns whether there's a name collision in the resource group.
+Import-Module "$PSScriptRoot/../create-vmss-helpers.psm1" -DisableNameChecking
 
-.DESCRIPTION
-Find-ResourceGroupNameCollision takes a list of resources, and checks if $Test
-collides names with any of the resources.
+####################################################################################################
+Write-Progress `
+  -Activity $ProgressActivity `
+  -Status 'Creating SSH key' `
+  -PercentComplete (100 / $TotalProgress * $CurrentProgress++)
 
-.PARAMETER Test
-The name to test.
-
-.PARAMETER Resources
-The list of resources.
-#>
-function Find-ResourceGroupNameCollision {
-  [CmdletBinding()]
-  Param([string]$Test, $Resources)
-
-  foreach ($resource in $Resources) {
-    if ($resource.ResourceGroupName -eq $Test) {
-      return $true
-    }
-  }
-
-  return $false
-}
-
-<#
-.SYNOPSIS
-Attempts to find a name that does not collide with any resources in the resource group.
-
-.DESCRIPTION
-Find-ResourceGroupName takes a set of resources from Get-AzResourceGroup, and finds the
-first name in {$Prefix, $Prefix-1, $Prefix-2, ...} such that the name doesn't collide with
-any of the resources in the resource group.
-
-.PARAMETER Prefix
-The prefix of the final name; the returned name will be of the form "$Prefix(-[1-9][0-9]*)?"
-#>
-function Find-ResourceGroupName {
-  [CmdletBinding()]
-  Param([string] $Prefix)
-
-  $resources = Get-AzResourceGroup
-  $result = $Prefix
-  $suffix = 0
-  while (Find-ResourceGroupNameCollision -Test $result -Resources $resources) {
-    $suffix++
-    $result = "$Prefix-$suffix"
-  }
-
-  return $result
-}
-
-<#
-.SYNOPSIS
-Creates a randomly generated password.
-
-.DESCRIPTION
-New-Password generates a password, randomly, of length $Length, containing
-only alphanumeric characters (both uppercase and lowercase).
-
-.PARAMETER Length
-The length of the returned password.
-#>
-function New-Password {
-  Param ([int] $Length = 32)
-
-  $Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-  $result = ''
-  for ($idx = 0; $idx -lt $Length; $idx++) {
-    # NOTE: this should probably use RNGCryptoServiceProvider
-    $result += $Chars[(Get-Random -Minimum 0 -Maximum $Chars.Length)]
-  }
-
-  return $result
-}
-
-<#
-.SYNOPSIS
-Sanitizes a name to be used in a storage account.
-
-.DESCRIPTION
-Sanitize-Name takes a string, and removes all of the '-'s and
-lowercases the string, since storage account names must have no
-'-'s and must be completely lowercase alphanumeric. It then makes
-certain that the length of the string is not greater than 24,
-since that is invalid.
-
-.PARAMETER RawName
-The name to sanitize.
-#>
-function Sanitize-Name {
-  [CmdletBinding()]
-  Param(
-    [string]$RawName
-  )
-
-  $result = $RawName.Replace('-', '').ToLowerInvariant()
-  if ($result.Length -gt 24) {
-    Write-Error 'Sanitized name for storage account $result was too long.'
-  }
-
-  return $result
+$sshDir = [System.IO.Path]::GetTempPath() + [System.IO.Path]::GetRandomFileName()
+mkdir $sshDir
+try {
+  ssh-keygen.exe -q -b 2048 -t rsa -f "$sshDir/key" -P [string]::Empty
+  $sshPublicKey = Get-Content "$sshDir/key.pub"
+} finally {
+  Remove-Item $sshDir -Recurse -Force
 }
 
 ####################################################################################################
@@ -151,7 +64,9 @@ Write-Progress `
   -Status 'Creating virtual network' `
   -PercentComplete (100 / $TotalProgress * $CurrentProgress++)
 
-$allowHttp = New-AzNetworkSecurityRuleConfig `
+$allFirewallRules = @()
+
+$allFirewallRules += New-AzNetworkSecurityRuleConfig `
   -Name AllowHTTP `
   -Description 'Allow HTTP(S)' `
   -Access Allow `
@@ -163,49 +78,49 @@ $allowHttp = New-AzNetworkSecurityRuleConfig `
   -DestinationAddressPrefix * `
   -DestinationPortRange @(80, 443)
 
-$allowDns = New-AzNetworkSecurityRuleConfig `
-  -Name AllowDNS `
-  -Description 'Allow DNS' `
+$allFirewallRules += New-AzNetworkSecurityRuleConfig `
+  -Name AllowSFTP `
+  -Description 'Allow (S)FTP' `
   -Access Allow `
-  -Protocol * `
+  -Protocol Tcp `
   -Direction Outbound `
   -Priority 1009 `
   -SourceAddressPrefix * `
   -SourcePortRange * `
   -DestinationAddressPrefix * `
-  -DestinationPortRange 53
+  -DestinationPortRange @(21, 22)
 
-$allowGit = New-AzNetworkSecurityRuleConfig `
-  -Name AllowGit `
-  -Description 'Allow git' `
+$allFirewallRules += New-AzNetworkSecurityRuleConfig `
+  -Name AllowDNS `
+  -Description 'Allow DNS' `
   -Access Allow `
-  -Protocol Tcp `
+  -Protocol * `
   -Direction Outbound `
   -Priority 1010 `
   -SourceAddressPrefix * `
   -SourcePortRange * `
   -DestinationAddressPrefix * `
-  -DestinationPortRange 9418
+  -DestinationPortRange 53
 
-$allowStorage = New-AzNetworkSecurityRuleConfig `
-  -Name AllowStorage `
-  -Description 'Allow Storage' `
+$allFirewallRules += New-AzNetworkSecurityRuleConfig `
+  -Name AllowGit `
+  -Description 'Allow git' `
   -Access Allow `
-  -Protocol * `
+  -Protocol Tcp `
   -Direction Outbound `
   -Priority 1011 `
-  -SourceAddressPrefix VirtualNetwork `
+  -SourceAddressPrefix * `
   -SourcePortRange * `
-  -DestinationAddressPrefix Storage `
-  -DestinationPortRange *
+  -DestinationAddressPrefix * `
+  -DestinationPortRange 9418
 
-$denyEverythingElse = New-AzNetworkSecurityRuleConfig `
+$allFirewallRules += New-AzNetworkSecurityRuleConfig `
   -Name DenyElse `
   -Description 'Deny everything else' `
   -Access Deny `
   -Protocol * `
   -Direction Outbound `
-  -Priority 1012 `
+  -Priority 1013 `
   -SourceAddressPrefix * `
   -SourcePortRange * `
   -DestinationAddressPrefix * `
@@ -216,13 +131,14 @@ $NetworkSecurityGroup = New-AzNetworkSecurityGroup `
   -Name $NetworkSecurityGroupName `
   -ResourceGroupName $ResourceGroupName `
   -Location $Location `
-  -SecurityRules @($allowHttp, $allowDns, $allowGit, $allowStorage, $denyEverythingElse)
+  -SecurityRules $allFirewallRules
 
 $SubnetName = $ResourceGroupName + 'Subnet'
 $Subnet = New-AzVirtualNetworkSubnetConfig `
   -Name $SubnetName `
   -AddressPrefix "10.0.0.0/16" `
-  -NetworkSecurityGroup $NetworkSecurityGroup
+  -NetworkSecurityGroup $NetworkSecurityGroup `
+  -ServiceEndpoint "Microsoft.Storage"
 
 $VirtualNetworkName = $ResourceGroupName + 'Network'
 $VirtualNetwork = New-AzVirtualNetwork `
@@ -257,12 +173,36 @@ $StorageContext = New-AzStorageContext `
   -StorageAccountName $StorageAccountName `
   -StorageAccountKey $StorageAccountKey
 
-New-AzStorageShare -Name 'archives' -Context $StorageContext
-Set-AzStorageShareQuota -ShareName 'archives' -Context $StorageContext -Quota 1024
+New-AzStorageContainer -Name archives -Context $StorageContext -Permission Off
+$StartTime = [DateTime]::Now
+$ExpiryTime = $StartTime.AddMonths(6)
+
+$SasToken = New-AzStorageAccountSASToken `
+  -Service Blob `
+  -Permission "racwdlup" `
+  -Context $StorageContext `
+  -StartTime $StartTime `
+  -ExpiryTime $ExpiryTime `
+  -ResourceType Service,Container,Object `
+  -Protocol HttpsOnly
+
+$SasToken = $SasToken.Substring(1) # strip leading ?
+
+# Note that we put the storage account into the firewall after creating the above SAS token or we
+# would be denied since the person running this script isn't one of the VMs we're creating here.
+Set-AzStorageAccount `
+  -ResourceGroupName $ResourceGroupName `
+  -AccountName $StorageAccountName `
+  -NetworkRuleSet ( `
+    @{bypass="AzureServices"; `
+    virtualNetworkRules=( `
+      @{VirtualNetworkResourceId=$VirtualNetwork.Subnets[0].Id;Action="allow"}); `
+    defaultAction="Deny"})
 
 ####################################################################################################
 Write-Progress `
-  -Activity 'Creating prototype VM' `
+  -Activity $ProgressActivity `
+  -Status 'Creating prototype VM' `
   -PercentComplete (100 / $TotalProgress * $CurrentProgress++)
 
 $NicName = $ResourceGroupName + 'NIC'
@@ -277,7 +217,8 @@ $VM = Set-AzVMOperatingSystem `
   -VM $VM `
   -Linux `
   -ComputerName $ProtoVMName `
-  -Credential $Credential
+  -Credential $Credential `
+  -DisablePasswordAuthentication
 
 $VM = Add-AzVMNetworkInterface -VM $VM -Id $Nic.Id
 $VM = Set-AzVMSourceImage `
@@ -288,6 +229,12 @@ $VM = Set-AzVMSourceImage `
   -Version latest
 
 $VM = Set-AzVMBootDiagnostic -VM $VM -Disable
+
+$VM = Add-AzVMSshPublicKey `
+  -VM $VM `
+  -KeyData $sshPublicKey `
+  -Path "/home/AdminUser/.ssh/authorized_keys"
+
 New-AzVm `
   -ResourceGroupName $ResourceGroupName `
   -Location $Location `
@@ -299,13 +246,23 @@ Write-Progress `
   -Status 'Running provisioning script provision-image.sh in VM' `
   -PercentComplete (100 / $TotalProgress * $CurrentProgress++)
 
-Invoke-AzVMRunCommand `
-  -ResourceGroupName $ResourceGroupName `
-  -VMName $ProtoVMName `
-  -CommandId 'RunShellScript' `
-  -ScriptPath "$PSScriptRoot\provision-image.sh" `
-  -Parameter @{StorageAccountName=$StorageAccountName; `
-    StorageAccountKey=$StorageAccountKey;}
+$tempScript = [System.IO.Path]::GetTempPath() + [System.IO.Path]::GetRandomFileName() + ".sh"
+try {
+  $script = Get-Content "$PSScriptRoot\provision-image.sh" -Encoding utf8NoBOM
+  $script += "echo `"PROVISIONED_AZURE_STORAGE_NAME=\`"$StorageAccountName\`"`" | sudo tee -a /etc/environment"
+  $script += "echo `"PROVISIONED_AZURE_STORAGE_SAS_TOKEN=\`"$SasToken\`"`" | sudo tee -a /etc/environment"
+  Set-Content -Path $tempScript -Value $script -Encoding utf8NoBOM
+
+  $ProvisionImageResult = Invoke-AzVMRunCommand `
+    -ResourceGroupName $ResourceGroupName `
+    -VMName $ProtoVMName `
+    -CommandId 'RunShellScript' `
+    -ScriptPath $tempScript
+
+  Write-Host "provision-image.sh output: $($ProvisionImageResult.value.Message)"
+} finally {
+  Remove-Item $tempScript -Recurse -Force
+}
 
 ####################################################################################################
 Write-Progress `
@@ -372,11 +329,16 @@ $Vmss = Add-AzVmssNetworkInterfaceConfiguration `
   -NetworkSecurityGroupId $NetworkSecurityGroup.Id `
   -Name $NicName
 
+$VmssPublicKey = New-Object -TypeName 'Microsoft.Azure.Management.Compute.Models.SshPublicKey' `
+  -ArgumentList @('/home/AdminUser/.ssh/authorized_keys', $sshPublicKey)
+
 $Vmss = Set-AzVmssOsProfile `
   -VirtualMachineScaleSet $Vmss `
   -ComputerNamePrefix $LiveVMPrefix `
   -AdminUsername AdminUser `
-  -AdminPassword $AdminPW
+  -AdminPassword $AdminPW `
+  -LinuxConfigurationDisablePasswordAuthentication $true `
+  -PublicKey @($VmssPublicKey)
 
 $Vmss = Set-AzVmssStorageProfile `
   -VirtualMachineScaleSet $Vmss `
