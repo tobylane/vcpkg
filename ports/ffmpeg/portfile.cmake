@@ -488,6 +488,13 @@ if (VCPKG_TARGET_IS_OSX)
     set(OPTIONS "${OPTIONS} --disable-vdpau") # disable vdpau in OSX
 endif()
 
+# Disable codecs and devices unused by CorsixTH
+set (OPTIONS "${OPTIONS} --disable-encoders")
+set (OPTIONS "${OPTIONS} --disable-decoders --enable-decoder=smacker --enable-decoder=smackaud")
+set (OPTIONS "${OPTIONS} --disable-muxers")
+set (OPTIONS "${OPTIONS} --disable-demuxers --enable-demuxer=smacker")
+set (OPTIONS "${OPTIONS} --disable-indevs")
+
 set(OPTIONS_CROSS "")
 
 if (VCPKG_TARGET_ARCHITECTURE STREQUAL "arm" OR VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64")
