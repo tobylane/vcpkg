@@ -13,7 +13,7 @@ set(LUASEC_LIBRARIES
     OpenSSL::applink
     ws2_32)
 
-add_library(ssl
+add_library(lua-ssl
     src/config.c
     src/ssl.c
     src/context.c
@@ -25,14 +25,11 @@ add_library(ssl
     src/luasocket/timeout.c
     src/luasocket/wsocket.c)
 
-if(WIN32)
-    add_definitions("-DLSEC_API=__declspec(dllexport)")
-endif()
+target_include_directories(lua-ssl PRIVATE ${LUASEC_INCLUDES})
+target_link_libraries(lua-ssl PRIVATE ${LUASEC_LIBRARIES})
+set_target_properties(lua-ssl PROPERTIES PREFIX "")
 
-target_include_directories(ssl PRIVATE ${LUASEC_INCLUDES})
-target_link_libraries(ssl PRIVATE ${LUASEC_LIBRARIES})
-
-install(TARGETS ssl
+install(TARGETS lua-ssl
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib)

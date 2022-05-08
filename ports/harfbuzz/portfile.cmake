@@ -1,16 +1,9 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO harfbuzz/harfbuzz
-    REF 7236c7e29cef1c2d76c7a284c5081ff4d3aa1127 # 2.7.4
-    SHA512 d231a788ea4e52231d4c363c1eca76424cb82ed0952b5c24d0b082e88b3dddbda967e7fffe67fffdcb22c7ebfbf0ec923365eb4532be772f2e61fa7d29b51998
+    REF 4.2.0
+    SHA512 2aff1e6a41d6186b71f2915296c46c0b2ffc67371e1f05c13a62c237ff7a84d7d78d414d7a395e1616a2861c83c4792ef5936a492713780564b994d18e2d3e38
     HEAD_REF master
-    PATCHES
-        # This patch is a workaround that is needed until the following issues are resolved upstream:
-        # - https://github.com/mesonbuild/meson/issues/8375
-        # - https://github.com/harfbuzz/harfbuzz/issues/2870
-        # Details: https://github.com/microsoft/vcpkg/issues/16262
-        0001-circumvent-samefile-error.patch
-        0002-fix-uwp-build.patch
 )
 
 if("icu" IN_LIST FEATURES)
@@ -49,7 +42,6 @@ vcpkg_configure_meson(
     SOURCE_PATH ${SOURCE_PATH}
     OPTIONS ${FEATURE_OPTIONS}
         -Dcairo=disabled # Use Cairo graphics library
-        -Dfontconfig=disabled    # Use fontconfig
         -Dintrospection=disabled # Generate gobject-introspection bindings (.gir/.typelib files)
         -Ddocs=disabled          # Generate documentation with gtk-doc
         -Dtests=disabled
@@ -63,6 +55,21 @@ vcpkg_configure_meson(
 vcpkg_install_meson()
 vcpkg_copy_pdbs()
 vcpkg_fixup_pkgconfig()
+
+if(VCPKG_TARGET_IS_WINDOWS AND VCPKG_LIBRARY_LINKAGE STREQUAL "static")
+	file(GLOB PC_FILES 
+		"${CURRENT_PACKAGES_DIR}/debug/lib/pkgconfig/*.pc" 
+		"${CURRENT_PACKAGES_DIR}/lib/pkgconfig/*.pc")
+	
+	foreach(PC_FILE IN LISTS PC_FILES)
+		file(READ "${PC_FILE}" PC_FILE_CONTENT)
+		string(REGEX REPLACE 
+			"\\$\\{prefix\}\\/lib\\/([a-zA-Z0-9\-]*)\\.lib" 
+			"-l\\1" PC_FILE_CONTENT 
+			"${PC_FILE_CONTENT}")
+		file(WRITE "${PC_FILE}" ${PC_FILE_CONTENT})
+	endforeach()
+endif()
 
 file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/lib/cmake")
 file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/lib/cmake")
