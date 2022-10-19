@@ -14,7 +14,7 @@ check out our [Getting Started](#getting-started) section for how to start using
 For short description of available commands, once you've installed vcpkg,
 you can run `vcpkg help`, or `vcpkg help [command]` for command-specific help.
 
-* Github: ports at [https://github.com/microsoft/vcpkg](https://github.com/microsoft/vcpkg), program at [https://github.com/microsoft/vcpkg-tool](https://github.com/microsoft/vcpkg-tool)
+* GitHub: ports at [https://github.com/microsoft/vcpkg](https://github.com/microsoft/vcpkg), program at [https://github.com/microsoft/vcpkg-tool](https://github.com/microsoft/vcpkg-tool)
 * Slack: [https://cppalliance.org/slack/](https://cppalliance.org/slack/), the #vcpkg channel
 * Discord: [\#include \<C++\>](https://www.includecpp.org), the #🌏vcpkg channel
 * Docs: [Documentation](docs/README.md)
@@ -33,6 +33,7 @@ you can run `vcpkg help`, or `vcpkg help [command]` for command-specific help.
     - [Vcpkg with Visual Studio CMake Projects](#vcpkg-with-visual-studio-cmake-projects)
     - [Vcpkg with CLion](#vcpkg-with-clion)
     - [Vcpkg as a Submodule](#vcpkg-as-a-submodule)
+    - [Vcpkg via FetchContent](#vcpkg-via-FetchContent)
 - [Tab-Completion/Auto-Completion](#tab-completionauto-completion)
 - [Examples](#examples)
 - [Contributing](#contributing)
@@ -120,7 +121,7 @@ In order to use vcpkg with CMake outside of an IDE,
 you can use the toolchain file:
 
 ```cmd
-> cmake -B [build directory] -S . -DCMAKE_TOOLCHAIN_FILE=[path to vcpkg]/scripts/buildsystems/vcpkg.cmake
+> cmake -B [build directory] -S . "-DCMAKE_TOOLCHAIN_FILE=[path to vcpkg]/scripts/buildsystems/vcpkg.cmake"
 > cmake --build [build directory]
 ```
 
@@ -163,7 +164,7 @@ $ ./vcpkg/vcpkg search [search term]
 In order to use vcpkg with CMake, you can use the toolchain file:
 
 ```sh
-$ cmake -B [build directory] -S . -DCMAKE_TOOLCHAIN_FILE=[path to vcpkg]/scripts/buildsystems/vcpkg.cmake
+$ cmake -B [build directory] -S . "-DCMAKE_TOOLCHAIN_FILE=[path to vcpkg]/scripts/buildsystems/vcpkg.cmake"
 $ cmake --build [build directory]
 ```
 
@@ -212,8 +213,6 @@ You'll then be able to bootstrap vcpkg along with the [quick start guide](#quick
 
 ## Using vcpkg with CMake
 
-If you're using vcpkg with CMake, the following may help!
-
 ### Visual Studio Code with CMake Tools
 
 Adding the following to your workspace `settings.json` will make
@@ -247,7 +246,7 @@ Finally, in `CMake options`, add the following line:
 -DCMAKE_TOOLCHAIN_FILE=[vcpkg root]/scripts/buildsystems/vcpkg.cmake
 ```
 
-Unfortunately, you'll have to add this to each profile.
+You must add this line to each profile.
 
 ### Vcpkg as a Submodule
 
@@ -256,7 +255,7 @@ you can add the following to your CMakeLists.txt before the first `project()` ca
 instead of passing `CMAKE_TOOLCHAIN_FILE` to the cmake invocation.
 
 ```cmake
-set(CMAKE_TOOLCHAIN_FILE ${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake
+set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake"
   CACHE STRING "Vcpkg toolchain file")
 ```
 
@@ -264,8 +263,30 @@ This will still allow people to not use vcpkg,
 by passing the `CMAKE_TOOLCHAIN_FILE` directly,
 but it will make the configure-build step slightly easier.
 
+### Vcpkg via FetchContent
+
+You can also grab vcpkg with CMake's built-in [FetchContent](https://cmake.org/cmake/help/v3.24/module/FetchContent.html) module.
+
+Don't worry about the bootstrap scripts, since `vcpkg.cmake` will run them for you!
+
+```
+cmake_minimum_required(VERSION 3.14)
+
+include(FetchContent)
+FetchContent_Declare(vcpkg
+    GIT_REPOSITORY https://github.com/microsoft/vcpkg/
+    GIT_TAG 2022.09.27
+)
+FetchContent_MakeAvailable(vcpkg)
+
+# NOTE: This must be defined before the first project call
+set(CMAKE_TOOLCHAIN_FILE "${vcpkg_SOURCE_DIR}/scripts/buildsystems/vcpkg.cmake" CACHE FILEPATH "")
+
+project(FOOBAR LANGUAGES "CXX")
+``` 
+
 [getting-started:using-a-package]: docs/examples/installing-and-using-packages.md
-[getting-started:integration]: docs/users/integration.md
+[getting-started:integration]: docs/users/buildsystems/integration.md
 [getting-started:git]: https://git-scm.com/downloads
 [getting-started:cmake-tools]: https://marketplace.visualstudio.com/items?itemName=ms-vscode.cmake-tools
 [getting-started:linux-gcc]: #installing-linux-developer-tools
