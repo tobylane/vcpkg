@@ -1,15 +1,7 @@
 diff --git a/src/codecs/music_fluidsynth.c b/src/codecs/music_fluidsynth.c
-index 49d9699a..cd92e7c8 100644
+index 561a305b..cd92e7c8 100644
 --- a/src/codecs/music_fluidsynth.c
 +++ b/src/codecs/music_fluidsynth.c
-@@ -1,6 +1,6 @@
- /*
-   SDL_mixer:  An audio mixer library based on the SDL library
--  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
-+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
- 
-   This software is provided 'as-is', without any express or implied
-   warranty.  In no event will the authors be held liable for any damages
 @@ -39,6 +39,9 @@ typedef struct {
  #if (FLUIDSYNTH_VERSION_MAJOR >= 2)
      void (*delete_fluid_player)(fluid_player_t*);
