@@ -1,17 +1,15 @@
-From 92344568ab46e3a8a757ae3f5d02786969cebe13 Mon Sep 17 00:00:00 2001
-From: "Stephen E. Baker" <baker.stephen.e@gmail.com>
-Date: Thu, 11 May 2023 22:05:06 -0400
-Subject: [PATCH] Add seek, tell, and duration to fluidsynth
-
-Ensure that when playing a track it starts from the beginning.
----
- src/codecs/music_fluidsynth.c | 55 +++++++++++++++++++++++++++++++++--
- 1 file changed, 53 insertions(+), 2 deletions(-)
-
 diff --git a/src/codecs/music_fluidsynth.c b/src/codecs/music_fluidsynth.c
-index 9678d2ef..cd92e7c8 100644
+index 49d9699a..cd92e7c8 100644
 --- a/src/codecs/music_fluidsynth.c
 +++ b/src/codecs/music_fluidsynth.c
+@@ -1,6 +1,6 @@
+ /*
+   SDL_mixer:  An audio mixer library based on the SDL library
+-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
++  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
+ 
+   This software is provided 'as-is', without any express or implied
+   warranty.  In no event will the authors be held liable for any damages
 @@ -39,6 +39,9 @@ typedef struct {
  #if (FLUIDSYNTH_VERSION_MAJOR >= 2)
      void (*delete_fluid_player)(fluid_player_t*);
@@ -32,6 +30,18 @@ index 9678d2ef..cd92e7c8 100644
  #else
          FUNCTION_LOADER(delete_fluid_player, int (*)(fluid_player_t*))
          FUNCTION_LOADER(delete_fluid_synth, int (*)(fluid_synth_t*))
+@@ -259,9 +265,9 @@ static void *FLUIDSYNTH_CreateFromRW(SDL_RWops *src, int freesrc)
+ static void FLUIDSYNTH_SetVolume(void *context, int volume)
+ {
+     FLUIDSYNTH_Music *music = (FLUIDSYNTH_Music *)context;
+-    /* FluidSynth's default is 0.2. Make 1.2 the maximum. */
++    /* FluidSynth's default gain is 0.2. Make 1.0 the maximum gain value to avoid sound overload. */
+     music->volume = volume;
+-    fluidsynth.fluid_synth_set_gain(music->synth, (float) (volume * 1.2 / MIX_MAX_VOLUME));
++    fluidsynth.fluid_synth_set_gain(music->synth, volume * 1.0f / MIX_MAX_VOLUME);
+ }
+ 
+ static int FLUIDSYNTH_GetVolume(void *context)
 @@ -274,10 +280,19 @@ static int FLUIDSYNTH_Play(void *context, int play_count)
  {
      FLUIDSYNTH_Music *music = (FLUIDSYNTH_Music *)context;
@@ -96,7 +106,7 @@ index 9678d2ef..cd92e7c8 100644
  Mix_MusicInterface Mix_MusicInterface_FLUIDSYNTH =
  {
      "FLUIDSYNTH",
-@@ -356,17 +401,23 @@ Mix_MusicInterface Mix_MusicInterface_FLUIDSYNTH =
+@@ -356,15 +401,23 @@ Mix_MusicInterface Mix_MusicInterface_FLUIDSYNTH =
      FLUIDSYNTH_IsPlaying,
      FLUIDSYNTH_GetAudio,
      NULL,   /* Jump */
@@ -113,15 +123,12 @@ index 9678d2ef..cd92e7c8 100644
      NULL,   /* LoopEnd */
      NULL,   /* LoopLength */
      NULL,   /* GetMetaTag */
-     NULL,   /* GetNumTracks */
-     NULL,   /* StartTrack */
 -    NULL,   /* Pause */
 -    NULL,   /* Resume */
++    NULL,   /* GetNumTracks */
++    NULL,   /* StartTrack */
 +    FLUIDSYNTH_Pause,
 +    FLUIDSYNTH_Resume,
      FLUIDSYNTH_Stop,
      FLUIDSYNTH_Delete,
      NULL,   /* Close */
--- 
-2.39.2.windows.1
-
