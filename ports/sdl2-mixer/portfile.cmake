@@ -7,6 +7,7 @@ vcpkg_from_github(
         fix-pkg-prefix.patch 
         fix-pkgconfig.patch 
         fix-deps-targets.patch
+        fluidsynth-seek.patch
 )
 
 vcpkg_check_features(
