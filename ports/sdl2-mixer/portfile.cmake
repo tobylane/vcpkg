@@ -24,10 +24,10 @@ vcpkg_check_features(
         opusfile SDL2MIXER_OPUS
 )
 
-if("fluidsynth" IN_LIST FEATURES)
-    vcpkg_find_acquire_program(PKGCONFIG)
-    list(APPEND EXTRA_OPTIONS "-DPKG_CONFIG_EXECUTABLE=${PKGCONFIG}")
-endif()
+#if("fluidsynth" IN_LIST FEATURES)
+#    vcpkg_find_acquire_program(PKGCONFIG)
+#    list(APPEND EXTRA_OPTIONS "-DPKG_CONFIG_EXECUTABLE=${PKGCONFIG}")
+#endif()
 
 vcpkg_cmake_configure(
     SOURCE_PATH "${SOURCE_PATH}"
