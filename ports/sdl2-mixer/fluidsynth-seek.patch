@@ -98,7 +98,7 @@ index 561a305b..cd92e7c8 100644
  Mix_MusicInterface Mix_MusicInterface_FLUIDSYNTH =
  {
      "FLUIDSYNTH",
-@@ -356,15 +401,23 @@ Mix_MusicInterface Mix_MusicInterface_FLUIDSYNTH =
+@@ -356,15 +401,21 @@ Mix_MusicInterface Mix_MusicInterface_FLUIDSYNTH =
      FLUIDSYNTH_IsPlaying,
      FLUIDSYNTH_GetAudio,
      NULL,   /* Jump */
@@ -117,8 +117,6 @@ index 561a305b..cd92e7c8 100644
      NULL,   /* GetMetaTag */
 -    NULL,   /* Pause */
 -    NULL,   /* Resume */
-+    NULL,   /* GetNumTracks */
-+    NULL,   /* StartTrack */
 +    FLUIDSYNTH_Pause,
 +    FLUIDSYNTH_Resume,
      FLUIDSYNTH_Stop,
